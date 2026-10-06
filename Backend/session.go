@@ -204,7 +204,7 @@ func PerformHandshake(
 	session := &Session{
 		conn:        ws,
 		sessionKey:  sessionKey,
-		idleTimeout: time.Duration(sessionIdleTimeoutMins) * time.Minute,
+		idleTimeout: time.Duration(sessionIdleTimeoutMins * float64(time.Minute)),
 		clientIP:    clientIP,
 	}
 
