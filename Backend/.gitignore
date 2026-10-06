@@ -1,0 +1,56 @@
+# Ignores the built web assets directory
+/web/
+
+# Binaries and mainstream Go compiler outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.prof
+
+# Architecture specific extensions
+*.a
+*.o
+
+# Common local binary outputs (if you build to a bin folder)
+bin/
+out/
+
+# ==============================================================================
+# Sensitive Data (Secrets, Keys, Configurations)
+# ==============================================================================
+.env
+.env.local
+.env.*
+*.pem
+*.key
+
+# ==============================================================================
+# Testing, Coverage, and Tooling
+# ==============================================================================
+# Testing coverage files
+*.out
+*.cover
+coverage.txt
+
+# Go workspaces
+go.work
+go.work.sum
+
+# golangci-lint cache
+.golangci-lint.cache/
+
+# ==============================================================================
+# IDEs and Editors
+# ==============================================================================
+# VS Code
+.vscode/
+
+# JetBrains (GoLand, IntelliJ)
+.idea/
+
+# General OS files
+.DS_Store
+Thumbs.db

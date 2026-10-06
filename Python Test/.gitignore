@@ -1,0 +1,97 @@
+# ==============================================================================
+# Python Core (Byte-compiled / C extensions)
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==============================================================================
+# Virtual Environments & Package Managers
+# ==============================================================================
+# Deployed / Local virtual environments
+.venv/
+venv/
+ENV/
+env/
+/pip-log.txt
+/pip-delete-this-directory.txt
+
+# Poetry, Pipenv, and Hatch artifacts
+.poetry/
+.pipenv/
+.hatch/
+
+# ==============================================================================
+# Sensitive Data (Secrets, Keys, Configurations)
+# ==============================================================================
+# Never commit your API keys, tokens, or environment variables
+.env
+.env.local
+.env.*
+*.pem
+*.key
+keys/
+
+# ==============================================================================
+# Distribution / Packaging
+# ==============================================================================
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==============================================================================
+# Testing, Coverage, and Code Quality
+# ==============================================================================
+.htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.hypothesis/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ==============================================================================
+# Jupyter Notebooks
+# ==============================================================================
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+*.webmanifest
+
+# ==============================================================================
+# IDEs and Editors (Optional but highly recommended)
+# ==============================================================================
+# VS Code
+.vscode/
+
+# PyCharm / IntelliJ WebStorm
+.idea/
+
+# General OS files
+.DS_Store
+Thumbs.db
+
+# sever_certificate / server_key
+server_cert.pem
+server_key.pem
