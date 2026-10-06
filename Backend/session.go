@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 type ServerIdentity struct {
@@ -79,21 +80,21 @@ type EncryptedEnvelope struct {
 }
 
 type RequestPayload struct {
-	Action           string            `json:"action"`
-	Account          string            `json:"account,omitempty"`
-	Password         string            `json:"password,omitempty"`
-	OldPassword      string            `json:"old_password,omitempty"`
-	NewPassword      string            `json:"new_password,omitempty"`
-	OrderedItemNames []string          `json:"ordered_item_names,omitempty"`
-	ItemName         string            `json:"item_name,omitempty"`
-	KeyValues        map[string]string `json:"key_values,omitempty"`
+	Action           string                                 `json:"action"`
+	Account          string                                 `json:"account,omitempty"`
+	Password         string                                 `json:"password,omitempty"`
+	OldPassword      string                                 `json:"old_password,omitempty"`
+	NewPassword      string                                 `json:"new_password,omitempty"`
+	OrderedItemNames []string                               `json:"ordered_item_names,omitempty"`
+	ItemName         string                                 `json:"item_name,omitempty"`
+	KeyValues        *orderedmap.OrderedMap[string, string] `json:"key_values,omitempty"`
 }
 
 type ResponsePayload struct {
-	Success   bool              `json:"success"`
-	Error     string            `json:"error,omitempty"`
-	ItemNames []string          `json:"item_names,omitempty"`
-	KeyValues map[string]string `json:"key_values,omitempty"`
+	Success   bool                                   `json:"success"`
+	Error     string                                 `json:"error,omitempty"`
+	ItemNames []string                               `json:"item_names,omitempty"`
+	KeyValues *orderedmap.OrderedMap[string, string] `json:"key_values,omitempty"`
 }
 
 func ConfigureWebSocket(ws *websocket.Conn) {

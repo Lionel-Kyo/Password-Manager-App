@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	_ "modernc.org/sqlite"
 )
 
@@ -15,11 +16,10 @@ type Database struct {
 }
 
 type DecryptedItem struct {
-	DisplayIndex int
-	Name         string
-	KeyValues    map[string]string
-	CreateAtUTC  string
-	UpdateAtUTC  string
+	Name        string
+	KeyValues   *orderedmap.OrderedMap[string, string]
+	CreateAtUTC string
+	UpdateAtUTC string
 }
 
 func InitDB(dbPath string) (*Database, error) {
@@ -137,7 +137,7 @@ func (d *Database) GetItemNames(userID int64, userKey []byte) ([]string, error) 
 	return names, nil
 }
 
-func (d *Database) GetItem(userID int64, name string, userKey []byte) (map[string]string, error) {
+func (d *Database) GetItem(userID int64, name string, userKey []byte) (*orderedmap.OrderedMap[string, string], error) {
 	rows, err := d.db.Query("SELECT name_payload, map_payload FROM items WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (d *Database) GetItem(userID int64, name string, userKey []byte) (map[strin
 				return nil, err
 			}
 
-			var kvs map[string]string
+			kvs := orderedmap.New[string, string]()
 			if err := json.Unmarshal(decMapBytes, &kvs); err != nil {
 				return nil, err
 			}
@@ -174,7 +174,7 @@ func (d *Database) GetItem(userID int64, name string, userKey []byte) (map[strin
 	return nil, errors.New("item not found")
 }
 
-func (d *Database) InsertItem(userID int64, name string, keyValues map[string]string, userKey []byte) error {
+func (d *Database) InsertItem(userID int64, name string, keyValues *orderedmap.OrderedMap[string, string], userKey []byte) error {
 	namePayload, err := EncryptAESGCM(userKey, []byte(name))
 	if err != nil {
 		return err
@@ -210,7 +210,7 @@ func (d *Database) InsertItem(userID int64, name string, keyValues map[string]st
 	return err
 }
 
-func (d *Database) UpdateItem(userID int64, name string, keyValues map[string]string, userKey []byte) error {
+func (d *Database) UpdateItem(userID int64, name string, keyValues *orderedmap.OrderedMap[string, string], userKey []byte) error {
 	rows, err := d.db.Query("SELECT id, name_payload FROM items WHERE user_id = ?", userID)
 	if err != nil {
 		return err
@@ -364,16 +364,15 @@ func (d *Database) ModifyPassword(userID int64, oldPassword, newPassword string)
 	oldUserKey := DeriveKey(oldPassword, oldSaltData)
 
 	// Fetch and decrypt all existing items with oldUserKey
-	rows, err := d.db.Query("SELECT display_index, name_payload, map_payload, create_at_utc, update_at_utc FROM items WHERE user_id = ?", userID)
+	rows, err := d.db.Query("SELECT name_payload, map_payload, create_at_utc, update_at_utc FROM items WHERE user_id = ? ORDER BY display_index ASC", userID)
 	if err != nil {
 		return nil, err
 	}
 
 	var decryptedItems []DecryptedItem
 	for rows.Next() {
-		var displayIndex int
 		var namePayload, mapPayload, createAt, updateAt string
-		if err := rows.Scan(&displayIndex, &namePayload, &mapPayload, &createAt, &updateAt); err != nil {
+		if err := rows.Scan(&namePayload, &mapPayload, &createAt, &updateAt); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -390,18 +389,17 @@ func (d *Database) ModifyPassword(userID int64, oldPassword, newPassword string)
 			return nil, errors.New("failed decrypting payload during re-key")
 		}
 
-		var kvs map[string]string
+		kvs := orderedmap.New[string, string]()
 		if err := json.Unmarshal(decMapBytes, &kvs); err != nil {
 			rows.Close()
 			return nil, err
 		}
 
 		decryptedItems = append(decryptedItems, DecryptedItem{
-			DisplayIndex: displayIndex,
-			Name:         string(decNameBytes),
-			KeyValues:    kvs,
-			CreateAtUTC:  createAt,
-			UpdateAtUTC:  updateAt,
+			Name:        string(decNameBytes),
+			KeyValues:   kvs,
+			CreateAtUTC: createAt,
+			UpdateAtUTC: updateAt,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -449,7 +447,7 @@ func (d *Database) ModifyPassword(userID int64, oldPassword, newPassword string)
 	}
 
 	// Re-encrypt and insert items with newUserKey
-	for _, item := range decryptedItems {
+	for item_index, item := range decryptedItems {
 		namePayload, err := EncryptAESGCM(newUserKey, []byte(item.Name))
 		if err != nil {
 			return nil, err
@@ -463,7 +461,7 @@ func (d *Database) ModifyPassword(userID int64, oldPassword, newPassword string)
 
 		_, err = tx.Exec(
 			"INSERT INTO items (user_id, display_index, name_payload, map_payload, create_at_utc, update_at_utc) VALUES (?, ?, ?, ?, ?, ?)",
-			userID, item.DisplayIndex, namePayload, mapPayload, item.CreateAtUTC, now,
+			userID, item_index, namePayload, mapPayload, item.CreateAtUTC, now,
 		)
 		if err != nil {
 			return nil, err

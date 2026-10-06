@@ -95,3 +95,5 @@ Thumbs.db
 # sever_certificate / server_key
 server_cert.pem
 server_key.pem
+transfer_account.py
+transfer_account.json
