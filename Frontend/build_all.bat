@@ -11,8 +11,14 @@ if %errorlevel% neq 0 goto :error
 echo.
 
 :: 2. Build Web (WASM)
-echo [2/4] Building Flutter Web with WebAssembly (WASM)...
-call flutter build web --wasm
+::echo [2/4] Building Flutter Web with WebAssembly (WASM)...
+::call flutter build web --wasm
+::if %errorlevel% neq 0 goto :error
+::echo.
+
+:: 2. Build Web (WASM)
+echo [2/4] Building Flutter Web...
+call flutter build web
 if %errorlevel% neq 0 goto :error
 echo.
 

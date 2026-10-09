@@ -61,10 +61,7 @@ func main() {
 
 	db, err := InitDB("password_manager.db")
 	if err != nil {
-		log.Fatalf(
-			"Database initialization failed: %v",
-			err,
-		)
+		log.Fatalf("Database initialization failed: %v", err)
 	}
 
 	serverIdentity, err := LoadServerPEM(
@@ -77,8 +74,8 @@ func main() {
 
 	upgrader := createUpgrader(cfg)
 
-	connectionLimiter := NewConnectionLimiter(int(cfg.MaxWebSocketConnections))
-	loginLimiter := NewLoginRateLimiter()
+	connectionLimiter := NewConnectionLimiter(cfg.SessionMaxConnections)
+	loginLimiter := NewLoginRateLimiter(cfg.LoginRate, cfg.LoginBurst, cfg.LoginBlockDuration)
 
 	http.HandleFunc("/ws", func(
 		w http.ResponseWriter,
@@ -107,7 +104,10 @@ func main() {
 
 		session, err := PerformHandshake(
 			ws,
-			cfg.SessionIdleTimeoutMins,
+			cfg.SessionReadTimeout,
+			cfg.SessionWriteTimeout,
+			cfg.SessionHandshakeTimeout,
+			cfg.SessionIdleTimeout,
 			serverIdentity,
 			clientIP,
 		)
@@ -132,18 +132,13 @@ func main() {
 		w http.ResponseWriter,
 		r *http.Request,
 	) {
-		path := strings.TrimPrefix(
-			r.URL.Path,
-			"/",
-		)
+		path := strings.TrimPrefix(r.URL.Path, "/")
 
-		// Serve index.html for the root.
 		if path == "" {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
-		// Check whether the requested file actually exists.
 		f, err := subFS.Open(path)
 		if err != nil {
 			r.URL.Path = "/"
@@ -154,36 +149,41 @@ func main() {
 		f.Close()
 
 		if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".mjs") {
-			w.Header().Set(
-				"Content-Type",
-				"text/javascript",
-			)
+			w.Header().Set("Content-Type", "text/javascript")
 		} else if strings.HasSuffix(path, ".wasm") {
-			w.Header().Set(
-				"Content-Type",
-				"application/wasm",
-			)
+			w.Header().Set("Content-Type", "application/wasm")
+		} else if strings.HasSuffix(path, ".map") {
+			w.Header().Set("Content-Type", "application/json")
 		}
 
 		fileServer.ServeHTTP(w, r)
 	})
 
 	addr := fmt.Sprintf("%s:%s", cfg.IP, cfg.Port)
-
 	log.Printf("Server starting on ws://%s/ws", addr)
-	log.Printf(
-		"CORS Protocols: %v | CORS Origins: %v | Session Idle Timeout: %f mins",
-		cfg.CorsProtocols,
-		cfg.CorsOrigins,
-		cfg.SessionIdleTimeoutMins,
-	)
-	log.Printf("Maximum WebSocket message size: %d bytes", MaxWebSocketMessageSize)
-	log.Printf("Maximum WebSocket connections: %d", cfg.MaxWebSocketConnections)
+	log.Println()
+	log.Printf("Network / CORS:")
+	log.Printf("  - CORS Protocols: %v", cfg.CorsProtocols)
+	log.Printf("  - CORS Origins:   %v", cfg.CorsOrigins)
+	log.Println()
+	log.Printf("Session & Timeouts:")
+	log.Printf("  - Max Connections:    %d", cfg.SessionMaxConnections)
+	log.Printf("  - Max Message Size:   %d", MaxWebSocketMessageSize)
+	log.Printf("  - Read Timeout:       %v", cfg.SessionReadTimeout)
+	log.Printf("  - Write Timeout:      %v", cfg.SessionWriteTimeout)
+	log.Printf("  - Handshake Timeout:  %v", cfg.SessionHandshakeTimeout)
+	log.Printf("  - Idle Timeout:       %v", cfg.SessionIdleTimeout)
+	log.Println()
+	log.Printf("Security & Rate Limiting:")
+	log.Printf("  - Login Rate:         %.1f", cfg.LoginRate)
+	log.Printf("  - Login Burst:        %d", cfg.LoginBurst)
+	log.Printf("  - Login Block Dur.:   %v", cfg.LoginBlockDuration)
+	log.Printf("  - Auth Token Life:    %v", cfg.AuthTokenLife)
+	log.Printf("  - Token Clean Interv: %v", cfg.AuthTokenCleanInterval)
+
+	GlobalTokenStore.Init(cfg.AuthTokenLife, cfg.AuthTokenCleanInterval)
 
 	if err := http.ListenAndServe(addr, nil); err != nil {
-		log.Fatal(
-			"ListenAndServe error:",
-			err,
-		)
+		log.Fatal("ListenAndServe error:", err)
 	}
 }

@@ -11,25 +11,17 @@ import (
 
 const (
 	MaxWebSocketMessageSize = 1 * 1024 * 1024 // 1 MiB
-
-	ReadTimeout      = 60 * time.Second
-	WriteTimeout     = 10 * time.Second
-	HandshakeTimeout = 10 * time.Second
-
-	LoginRate          = 5
-	LoginBurst         = 5
-	LoginBlockDuration = 5 * time.Minute
 )
 
 type ConnectionLimiter struct {
-	mu          sync.Mutex
-	connections int
-	max         int
+	mu                 sync.Mutex
+	currentConnections int32
+	maxConnections     int32
 }
 
-func NewConnectionLimiter(max int) *ConnectionLimiter {
+func NewConnectionLimiter(maxConnections int32) *ConnectionLimiter {
 	return &ConnectionLimiter{
-		max: max,
+		maxConnections: maxConnections,
 	}
 }
 
@@ -37,12 +29,12 @@ func (l *ConnectionLimiter) Acquire() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.connections >= l.max {
-		log.Printf("Connection limit exceeded: current=%d, max=%d", l.connections, l.max)
+	if l.currentConnections >= l.maxConnections {
+		log.Printf("Connection limit exceeded: current=%d, max=%d", l.currentConnections, l.maxConnections)
 		return false
 	}
 
-	l.connections++
+	l.currentConnections++
 	return true
 }
 
@@ -50,25 +42,35 @@ func (l *ConnectionLimiter) Release() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.connections > 0 {
-		l.connections--
+	if l.currentConnections > 0 {
+		l.currentConnections--
 	}
 }
 
 type LoginRateLimiter struct {
-	mu      sync.Mutex
-	clients map[string]*loginAttempt
+	mu                 sync.Mutex
+	loginRate          float64
+	loginBurst         int32
+	loginBlockDuration time.Duration
+	clients            map[string]*loginAttempt
 }
 
 type loginAttempt struct {
 	limiter    *rate.Limiter
-	failures   int
+	failures   int32
 	blockedTil time.Time
 }
 
-func NewLoginRateLimiter() *LoginRateLimiter {
+func NewLoginRateLimiter(
+	loginRate float64,
+	loginBurst int32,
+	loginBlockDuration time.Duration,
+) *LoginRateLimiter {
 	return &LoginRateLimiter{
-		clients: make(map[string]*loginAttempt),
+		loginRate:          loginRate,
+		loginBurst:         loginBurst,
+		loginBlockDuration: loginBlockDuration,
+		clients:            make(map[string]*loginAttempt),
 	}
 }
 
@@ -77,8 +79,8 @@ func (l *LoginRateLimiter) get(ip string) *loginAttempt {
 	if !ok {
 		entry = &loginAttempt{
 			limiter: rate.NewLimiter(
-				rate.Limit(LoginRate),
-				LoginBurst,
+				rate.Limit(l.loginRate),
+				int(l.loginBurst),
 			),
 		}
 
@@ -115,10 +117,10 @@ func (l *LoginRateLimiter) Failed(ip string) {
 
 	entry.failures++
 
-	if entry.failures >= LoginBurst {
-		entry.blockedTil = time.Now().Add(LoginBlockDuration)
+	if entry.failures >= l.loginBurst {
+		entry.blockedTil = time.Now().Add(l.loginBlockDuration)
 		entry.failures = 0
-		log.Printf("IP %s exceeded max login failures and is blocked for %v", ip, LoginBlockDuration)
+		log.Printf("IP %s exceeded max login failures and is blocked for %v", ip, l.loginBlockDuration)
 	}
 }
 

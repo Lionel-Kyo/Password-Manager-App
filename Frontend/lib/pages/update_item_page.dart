@@ -32,15 +32,19 @@ class _UpdateItemPageState extends State<UpdateItemPage> {
             _fields.add(MapEntry(TextEditingController(text: k), TextEditingController(text: v)));
           });
         });
+      } else {
+        _showError(res["error"] ?? "Failed to load item");
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent),
-        );
-      }
+      _showError(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showError(String msg) {
+    if (mounted)  {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
     }
   }
 
@@ -53,12 +57,12 @@ class _UpdateItemPageState extends State<UpdateItemPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("CANCEL"),
+            child: const Text("Cancel"),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent),
-            child: const Text("UPDATE", style: TextStyle(color: Colors.white)),
+            child: const Text("Update", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -92,14 +96,6 @@ class _UpdateItemPageState extends State<UpdateItemPage> {
       }
     } catch (e) {
       _showError(e.toString());
-    }
-  }
-
-  void _showError(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
-      );
     }
   }
 
@@ -170,7 +166,7 @@ class _UpdateItemPageState extends State<UpdateItemPage> {
                     child: ElevatedButton(
                       onPressed: _confirmAndUpdate,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent),
-                      child: const Text("UPDATE ITEM", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text("Update", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   )
                 ],

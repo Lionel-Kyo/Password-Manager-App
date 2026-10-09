@@ -94,9 +94,46 @@ func HandleSession(
 				break
 			}
 
+			copiedKey := make([]byte, len(key))
+			copy(copiedKey, key)
+			authToken, err := GlobalTokenStore.CreateToken(id, copiedKey)
+			if err != nil {
+				resp.Error = "failed to create auth token"
+				break
+			}
+
 			loginLimiter.Success(s.clientIP)
 
 			s.Authenticate(id, key)
+
+			resp.AuthToken = authToken
+			resp.Success = true
+
+		case "VerifyToken":
+			if !loginLimiter.Allow(s.clientIP) {
+				resp.Error = "too many attempts; try again later"
+				break
+			}
+
+			if req.AuthToken == "" {
+				loginLimiter.Failed(s.clientIP)
+				resp.Error = "auth token required"
+				break
+			}
+
+			id, key, ok := GlobalTokenStore.ValidateToken(req.AuthToken)
+
+			if !ok {
+				loginLimiter.Failed(s.clientIP)
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
+				break
+			}
+
+			loginLimiter.Success(s.clientIP)
+
+			copiedKey := make([]byte, len(key))
+			copy(copiedKey, key)
+			s.Authenticate(id, copiedKey)
 
 			resp.Success = true
 
@@ -118,7 +155,7 @@ func HandleSession(
 
 			userID, _, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 
@@ -155,7 +192,7 @@ func HandleSession(
 
 			userID, userKey, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 
@@ -184,7 +221,7 @@ func HandleSession(
 
 			userID, userKey, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 
@@ -214,7 +251,7 @@ func HandleSession(
 
 			userID, userKey, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 
@@ -243,7 +280,7 @@ func HandleSession(
 
 			userID, userKey, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 
@@ -267,7 +304,7 @@ func HandleSession(
 
 			userID, userKey, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 
@@ -295,7 +332,7 @@ func HandleSession(
 
 			userID, userKey, ok := s.GetUserCredentials()
 			if !ok {
-				resp.Error = "unauthorized or session expired"
+				resp.Error = UnauthorizedOrSessionExpiredErrorMsg
 				break
 			}
 

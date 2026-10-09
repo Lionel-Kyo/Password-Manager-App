@@ -20,6 +20,8 @@ class PasswordManagerApp extends StatelessWidget {
     return MaterialApp(
       title: 'Password Manager',
       debugShowCheckedModeBanner: false,
+      builder: (context, child) => SelectionArea(child: child ?? const SizedBox()),
+      home: const LoginPage(),
       themeMode: ThemeMode.dark,
       darkTheme: ThemeData(
         useMaterial3: true,
@@ -60,7 +62,6 @@ class PasswordManagerApp extends StatelessWidget {
           prefixIconColor: Colors.white.withValues(alpha: 0.6),
         ),
       ),
-      home: const LoginPage(),
     );
   }
 }

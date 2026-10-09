@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -23,15 +24,16 @@ class ApiClient extends ChangeNotifier {
   Completer<Map<String, dynamic>>? _pendingCompleter;
 
   Timer? _connectionTimeoutTimer;
-
   int _connectionGeneration = 0;
 
   bool _handshakeCompleted = false;
-
   static const Duration handshakeTimeout = Duration(seconds: 10);
   static const Duration requestTimeout = Duration(seconds: 10);
 
   static const int maxWebSocketMessageBytes = 1 * 1024 * 1024; // 1 MiB
+
+  final _secureStorage = const FlutterSecureStorage();
+  String _authToken = "";
 
   Future<void> connect() async {
     disconnect();
@@ -57,12 +59,7 @@ class ApiClient extends ChangeNotifier {
         }
 
         if (!completer.isCompleted && !_handshakeCompleted) {
-          completer.completeError(
-            TimeoutException(
-              'WebSocket handshake timed out',
-              handshakeTimeout,
-            ),
-          );
+          completer.completeError(TimeoutException('WebSocket handshake timed out', handshakeTimeout));
 
           disconnect();
         }
@@ -97,6 +94,7 @@ class ApiClient extends ChangeNotifier {
               _connectionTimeoutTimer?.cancel();
               _connectionTimeoutTimer = null;
 
+              await _tryTokenLogin();
               notifyListeners();
 
               if (!completer.isCompleted) {
@@ -201,7 +199,7 @@ class ApiClient extends ChangeNotifier {
       final handshakeStr = await _crypto.createHandshakePayload();
 
       if (generation != _connectionGeneration) {
-        return completer.future;
+        return await completer.future;
       }
 
       if (_messageSizeInBytes(handshakeStr) > maxWebSocketMessageBytes) {
@@ -316,8 +314,7 @@ class ApiClient extends ChangeNotifier {
       throw Exception('Another operation is already in progress');
     }
 
-    final encryptedStr =
-        await _crypto.encryptPayload(req);
+    final encryptedStr = await _crypto.encryptPayload(req);
 
     if (_messageSizeInBytes(encryptedStr) > maxWebSocketMessageBytes) {
       throw Exception('Request exceeds maximum WebSocket message size');
@@ -349,7 +346,50 @@ class ApiClient extends ChangeNotifier {
     }
   }
 
+  Future<void> login(String account, String password) async {
+    try { await _secureStorage.delete(key: 'auth_token'); }
+    catch (_) { _authToken = ""; }
+    final response = await sendCommand({
+      'action': 'Verify',
+      'account': account,
+      'password': password,
+    });
+
+    if (response['success'] == true) {
+      final authToken = response['auth_token'];
+      if (authToken != null && authToken is String) {
+        try { await _secureStorage.write(key: 'auth_token', value: authToken); }
+        catch (_) { _authToken = authToken; }
+      }
+    } else {
+      throw Exception(response['error'] ?? 'Invalid credentials');
+    }
+  }
+
+  Future<void> _tryTokenLogin() async {
+    try {
+      String? token;
+      try { token = await _secureStorage.read(key: 'auth_token'); }
+      catch (_) { token = _authToken; }
+
+      if (token != null && token.isNotEmpty) {
+        final response = await sendCommand({
+          'action': 'VerifyToken',
+          'auth_token': token,
+        });
+
+        if (response['success'] != true) {
+        try { await _secureStorage.delete(key: 'auth_token'); }
+        catch (_) { _authToken = ""; }
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> logout() async {
+    try { await _secureStorage.delete(key: 'auth_token'); }
+    catch (_) { _authToken = ""; }
+
     if (!_isConnected || !_handshakeCompleted) {
       _clearCryptoState();
       return;
@@ -374,9 +414,7 @@ class ApiClient extends ChangeNotifier {
     final pending = _pendingCompleter;
 
     if (pending != null && !pending.isCompleted) {
-      pending.completeError(
-        Exception('WebSocket disconnected'),
-      );
+      pending.completeError(Exception('WebSocket disconnected'));
     }
 
     _pendingCompleter = null;
@@ -385,9 +423,7 @@ class ApiClient extends ChangeNotifier {
     _isConnected = false;
 
     _closeCurrentChannel();
-
     _clearCryptoState();
-
     notifyListeners();
   }
 
@@ -408,20 +444,20 @@ class ApiClient extends ChangeNotifier {
     _crypto = CryptoTransportService();
   }
 
+  static bool isUnauthorizedOrSessionExpiredErrorMsg(Map<String, dynamic>? response) {
+    return response?["error"] == "unauthorized or session expired";
+  }
+
   static bool isReleaseWeb() {
     return kIsWeb && kReleaseMode;
   }
 
-  static Future<void> saveSettings(
-    String host,
-    int port,
-  ) async {
+  static Future<void> saveSettings(String host, int port) async {
     if (isReleaseWeb()) {
       return;
     }
 
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     await prefs.setString('host', host);
     await prefs.setInt('port', port);
@@ -437,11 +473,9 @@ class ApiClient extends ChangeNotifier {
       };
     }
 
-    final SharedPreferences prefs =
-        await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
 
     final String host = prefs.getString('host') ?? '192.168.1.10';
-
     final int port = prefs.getInt('port') ?? 8080;
 
     return {

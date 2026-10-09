@@ -42,12 +42,12 @@ class _InsertItemPageState extends State<InsertItemPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("CANCEL"),
+            child: const Text("Cancel"),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent),
-            child: const Text("CREATE", style: TextStyle(color: Colors.white)),
+            child: const Text("Create", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

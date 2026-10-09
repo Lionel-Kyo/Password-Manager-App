@@ -26,11 +26,12 @@ class _RegisterPageState extends State<RegisterPage> {
       });
 
       if (res["success"] == true) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Account created successfully! Please login.")),
-        );
-        Navigator.pop(context);
+        if (mounted){
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Account created successfully! Please login.")),
+          );
+          Navigator.pop(context);
+        }
       } else {
         _showError(res["error"] ?? "Registration failed");
       }
@@ -42,7 +43,9 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    if (mounted)  {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    }
   }
 
   @override
@@ -56,9 +59,20 @@ class _RegisterPageState extends State<RegisterPage> {
             constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
               children: [
-                TextField(controller: _accCtrl, decoration: const InputDecoration(labelText: "Account")),
+                TextField(
+                  controller: _accCtrl, 
+                  decoration: const InputDecoration(labelText: "Account"),
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _loading ? null : _register(),
+                ),
                 const SizedBox(height: 16),
-                TextField(controller: _pwdCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Password")),
+                TextField(
+                  controller: _pwdCtrl, 
+                  obscureText: true, 
+                  decoration: const InputDecoration(labelText: "Password"),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _loading ? null : _register(),
+                ),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
@@ -68,7 +82,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.tealAccent),
                     child: _loading
                         ? const CircularProgressIndicator()
-                        : const Text("REGISTER", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        : const Text("Register", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

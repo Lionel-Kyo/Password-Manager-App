@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:password_manager_app/helpers/clipboard_native.dart'
+    if (dart.library.js_interop) 'package:password_manager_app/helpers/clipboard_web.dart';
+import 'package:password_manager_app/pages/login_page.dart';
 import 'package:password_manager_app/pages/update_item_page.dart';
 import 'package:password_manager_app/service/api_client_service.dart';
 
@@ -13,9 +15,9 @@ class ShowItemPage extends StatefulWidget {
 }
 
 class _ShowItemPageState extends State<ShowItemPage> {
-  Map<String, String>? _kvs;
+  Map<String, String> _kvs = {};
   bool _loading = true;
-  final Set<String> _unmaskedKeys = {}; // Tracks which keys are currently visible
+  final Set<String> _unmaskedKeys = {};
 
   @override
   void initState() {
@@ -30,15 +32,28 @@ class _ShowItemPageState extends State<ShowItemPage> {
         setState(() {
           _kvs = Map<String, String>.from(res["key_values"] ?? {});
         });
+      } else {
+        _showError(res["error"] ?? "Failed to load item");
+        if (ApiClient.isUnauthorizedOrSessionExpiredErrorMsg(res)) {
+          if (mounted){
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginPage()),
+              (route) => false,
+            );
+          }
+        }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent),
-        );
-      }
+      _showError(e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showError(String msg) {
+    if (mounted)  {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
     }
   }
 
@@ -62,78 +77,85 @@ class _ShowItemPageState extends State<ShowItemPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: ListView(
-                      children: _kvs!.entries.map((entry) {
-                        final isUnmasked = _unmaskedKeys.contains(entry.key);
-                        final displayValue = isUnmasked ? entry.value : "••••••••";
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: ListTile(
-                            title: Text(entry.key, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                            subtitle: Text(
-                              displayValue,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    isUnmasked ? Icons.visibility_off : Icons.visibility,
-                                    color: Colors.grey,
-                                  ),
-                                  tooltip: isUnmasked ? "Hide Value" : "Show Value",
-                                  onPressed: () {
-                                    setState(() {
-                                      if (isUnmasked) {
-                                        _unmaskedKeys.remove(entry.key);
-                                      } else {
-                                        _unmaskedKeys.add(entry.key);
-                                      }
-                                    });
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.copy, color: Colors.tealAccent),
-                                  tooltip: "Copy Value",
-                                  onPressed: () {
-                                    Clipboard.setData(ClipboardData(text: entry.value));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("Value copied to clipboard")),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+          : _kvs.isEmpty
+              ? const Center(
+                  child: Text(
+                    "No data found or connection failed.",
+                    style: TextStyle(color: Colors.grey),
                   ),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A2A3D)),
-                      child: const Text("BACK TO MAIN PAGE", style: TextStyle(color: Colors.white)),
-                    ),
-                  )
-                ],
-              ),
-            ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: ListView(
+                          children: _kvs.entries.map((entry) {
+                            final isUnmasked = _unmaskedKeys.contains(entry.key);
+                            final displayValue = isUnmasked ? entry.value : "••••••••";
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              child: ListTile(
+                                title: Text(entry.key, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                subtitle: Text(
+                                  displayValue,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        isUnmasked ? Icons.visibility_off : Icons.visibility,
+                                        color: Colors.grey,
+                                      ),
+                                      tooltip: isUnmasked ? "Hide Value" : "Show Value",
+                                      onPressed: () {
+                                        setState(() {
+                                          if (isUnmasked) {
+                                            _unmaskedKeys.remove(entry.key);
+                                          } else {
+                                            _unmaskedKeys.add(entry.key);
+                                          }
+                                        });
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.copy, color: Colors.tealAccent),
+                                      tooltip: "Copy Value",
+                                      onPressed: () {
+                                        copyToClipboard(entry.value);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text("Value copied to clipboard")),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2A2A3D)),
+                          child: const Text("Back to main page", style: TextStyle(color: Colors.white)),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
     );
   }
 }

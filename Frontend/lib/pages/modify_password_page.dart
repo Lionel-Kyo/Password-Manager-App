@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:password_manager_app/pages/login_page.dart';
 import 'package:password_manager_app/service/api_client_service.dart';
 
 class ModifyPasswordPage extends StatefulWidget {
@@ -33,6 +34,15 @@ class _ModifyPasswordPageState extends State<ModifyPasswordPage> {
         Navigator.pop(context);
       } else {
         _showError(res["error"] ?? "Failed to update password");
+        if (ApiClient.isUnauthorizedOrSessionExpiredErrorMsg(res)) {
+          if (mounted){
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginPage()),
+              (route) => false,
+            );
+          }
+        }
       }
     } catch (e) {
       _showError(e.toString());
@@ -42,7 +52,9 @@ class _ModifyPasswordPageState extends State<ModifyPasswordPage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    if (mounted)  {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    }
   }
 
   @override
@@ -56,9 +68,21 @@ class _ModifyPasswordPageState extends State<ModifyPasswordPage> {
             constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
               children: [
-                TextField(controller: _oldPwdCtrl, obscureText: true, decoration: const InputDecoration(labelText: "Current Password")),
+                TextField(
+                  controller: _oldPwdCtrl, 
+                  obscureText: true, 
+                  decoration: const InputDecoration(labelText: "Current Password"),
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _loading ? null : _modify(),
+                ),
                 const SizedBox(height: 16),
-                TextField(controller: _newPwdCtrl, obscureText: true, decoration: const InputDecoration(labelText: "New Password")),
+                TextField(
+                  controller: _newPwdCtrl, 
+                  obscureText: true, 
+                  decoration: const InputDecoration(labelText: "New Password"),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _loading ? null : _modify(),
+                ),
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,

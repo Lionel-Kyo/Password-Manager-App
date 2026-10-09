@@ -22,20 +22,16 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
     try {
-      final res = await api.sendCommand({
-        "action": "Verify",
-        "account": _accCtrl.text,
-        "password": _pwdCtrl.text,
-      });
+      await api.login(
+        _accCtrl.text,
+        _pwdCtrl.text,
+      );
 
-      if (res["success"] == true) {
-        if (!mounted) return;
+      if (mounted){
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const MainPage()),
         );
-      } else {
-        _showError(res["error"] ?? "Invalid credentials");
       }
     } catch (e) {
       _showError(e.toString());
@@ -45,7 +41,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    if (mounted)  {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.redAccent));
+    }
   }
 
   @override
@@ -66,11 +64,15 @@ class _LoginPageState extends State<LoginPage> {
                 TextField(
                   controller: _accCtrl,
                   decoration: const InputDecoration(labelText: "Account", prefixIcon: Icon(Icons.person)),
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _loading ? null : _login(),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _pwdCtrl,
                   obscureText: _obscure,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _loading ? null : _login(),
                   decoration: InputDecoration(
                     labelText: "Password",
                     prefixIcon: const Icon(Icons.lock),

@@ -17,6 +17,10 @@ import (
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
+const (
+	UnauthorizedOrSessionExpiredErrorMsg = "unauthorized or session expired"
+)
+
 type ServerIdentity struct {
 	CertPEM []byte
 	Signer  crypto.Signer
@@ -56,7 +60,9 @@ type Session struct {
 	authenticatedAt time.Time
 	lastActivityAt  time.Time
 
-	idleTimeout time.Duration
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+	idleTimeout  time.Duration
 
 	clientIP string
 
@@ -83,6 +89,7 @@ type RequestPayload struct {
 	Action           string                                 `json:"action"`
 	Account          string                                 `json:"account,omitempty"`
 	Password         string                                 `json:"password,omitempty"`
+	AuthToken        string                                 `json:"auth_token,omitempty"`
 	OldPassword      string                                 `json:"old_password,omitempty"`
 	NewPassword      string                                 `json:"new_password,omitempty"`
 	OrderedItemNames []string                               `json:"ordered_item_names,omitempty"`
@@ -93,31 +100,33 @@ type RequestPayload struct {
 type ResponsePayload struct {
 	Success   bool                                   `json:"success"`
 	Error     string                                 `json:"error,omitempty"`
+	AuthToken string                                 `json:"auth_token,omitempty"`
 	ItemNames []string                               `json:"item_names,omitempty"`
 	KeyValues *orderedmap.OrderedMap[string, string] `json:"key_values,omitempty"`
 }
 
-func ConfigureWebSocket(ws *websocket.Conn) {
+func ConfigureWebSocket(ws *websocket.Conn, readTimeout time.Duration) {
 	ws.SetReadLimit(MaxWebSocketMessageSize)
 
-	_ = ws.SetReadDeadline(time.Now().Add(ReadTimeout))
+	_ = ws.SetReadDeadline(time.Now().Add(readTimeout))
 
 	ws.SetPongHandler(func(string) error {
-		return ws.SetReadDeadline(time.Now().Add(ReadTimeout))
+		return ws.SetReadDeadline(time.Now().Add(readTimeout))
 	})
 }
 
 func PerformHandshake(
 	ws *websocket.Conn,
-	sessionIdleTimeoutMins float64,
+	readTimeout time.Duration,
+	writeTimeout time.Duration,
+	handshakeTimeout time.Duration,
+	sessionIdleTimeout time.Duration,
 	identity *ServerIdentity,
 	clientIP string,
 ) (*Session, error) {
-	ConfigureWebSocket(ws)
+	ConfigureWebSocket(ws, readTimeout)
 
-	if err := ws.SetReadDeadline(
-		time.Now().Add(HandshakeTimeout),
-	); err != nil {
+	if err := ws.SetReadDeadline(time.Now().Add(handshakeTimeout)); err != nil {
 		return nil, err
 	}
 
@@ -189,7 +198,7 @@ func PerformHandshake(
 	}
 
 	if err := ws.SetWriteDeadline(
-		time.Now().Add(WriteTimeout),
+		time.Now().Add(writeTimeout),
 	); err != nil {
 		return nil, err
 	}
@@ -202,17 +211,17 @@ func PerformHandshake(
 	}
 
 	session := &Session{
-		conn:        ws,
-		sessionKey:  sessionKey,
-		idleTimeout: time.Duration(sessionIdleTimeoutMins * float64(time.Minute)),
-		clientIP:    clientIP,
+		conn:         ws,
+		sessionKey:   sessionKey,
+		readTimeout:  readTimeout,
+		writeTimeout: writeTimeout,
+		idleTimeout:  sessionIdleTimeout,
+		clientIP:     clientIP,
 	}
 
 	session.Touch()
 
-	if err := ws.SetReadDeadline(
-		time.Now().Add(ReadTimeout),
-	); err != nil {
+	if err := ws.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
 		return nil, err
 	}
 
@@ -226,10 +235,7 @@ func (s *Session) Touch() {
 	s.lastActivityAt = time.Now()
 }
 
-func (s *Session) Authenticate(
-	userID int64,
-	userKey []byte,
-) {
+func (s *Session) Authenticate(userID int64, userKey []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -277,7 +283,7 @@ func (s *Session) IsSessionValid() bool {
 func (s *Session) RequireAuthentication() error {
 	if !s.IsSessionValid() {
 		s.Logout()
-		return errors.New("unauthorized or session expired")
+		return errors.New(UnauthorizedOrSessionExpiredErrorMsg)
 	}
 
 	return nil
@@ -295,7 +301,7 @@ func (s *Session) GetUserCredentials() (int64, []byte, bool) {
 }
 
 func (s *Session) ReadEncryptedRequest() (*RequestPayload, error) {
-	if err := s.conn.SetReadDeadline(time.Now().Add(ReadTimeout)); err != nil {
+	if err := s.conn.SetReadDeadline(time.Now().Add(s.readTimeout)); err != nil {
 		return nil, err
 	}
 
@@ -338,9 +344,7 @@ func (s *Session) ReadEncryptedRequest() (*RequestPayload, error) {
 	return &req, nil
 }
 
-func (s *Session) WriteEncryptedResponse(
-	resp *ResponsePayload,
-) error {
+func (s *Session) WriteEncryptedResponse(resp *ResponsePayload) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -368,7 +372,7 @@ func (s *Session) WriteEncryptedResponse(
 	}
 
 	if err := s.conn.SetWriteDeadline(
-		time.Now().Add(WriteTimeout),
+		time.Now().Add(s.writeTimeout),
 	); err != nil {
 		return err
 	}
